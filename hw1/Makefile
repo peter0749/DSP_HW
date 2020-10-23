@@ -2,15 +2,15 @@
 CC=gcc
 CXX=g++
 CFLAGS=-std=c99 -O3 -march=native --fast-math
-LDFLAGS=-lm -lpthread
+LDFLAGS=-lm -lpthread -fopenmp
 TARGET=train test
 TRAIN_ITER=200
 
 all: $(TARGET)
 
-lib/hmm_utils.o: src/lib/hmm_utils.c inc/lib/hmm_utils.h
-	if [ ! -d ./lib ]; then mkdir -p ./lib; fi
-	$(CC) -o $@ $< -c $(CFLAGS) -Iinc
+lib/hmm_utils.o: src/lib/hmm_utils.cpp
+	mkdir -p ./lib
+	$(CXX) -o $@ $< -c $(CFLAGS) -Iinc
 
 train: src/train.cpp lib/hmm_utils.o
 	$(CXX) -o $@ $^ $(CFLAGS) $(LDFLAGS) -Iinc

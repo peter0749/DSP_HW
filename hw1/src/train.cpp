@@ -1,3 +1,4 @@
+#include <omp.h>
 #include <cstdlib>
 #include <cmath>
 #include <vector>
@@ -17,9 +18,9 @@ int main(const int argc, const char **argv)
     char buffer[MAX_LINE];
     vector<vector<int> > sequence;
     HMM::loadHMM( &hmm, argv[2] );
-    double accumInit[MAX_STATE] = {0};
-    double accumTrans[MAX_STATE*MAX_STATE] = {0};
-    double accumObserv[MAX_STATE*MAX_STATE] = {0};
+    double *accumInit = NULL;
+    double *accumTrans = NULL;
+    double *accumObserv = NULL;
     int n_state = hmm.state_num;
     // int n_observe = hmm->observ_num;
     FILE *fpSequence = HMM::open_or_die(data_path, "r");
@@ -33,11 +34,17 @@ int main(const int argc, const char **argv)
     }
     fclose(fpSequence);
     fpSequence = NULL;
+
+    accumInit = new double[n_state];
+    accumTrans = new double[n_state*n_state];
+    accumObserv = new double[n_state*n_state];
+
     for (int i=0; i<n_iter; ++i) {
         random_shuffle(sequence.begin(), sequence.end());
         memset(accumInit, 0x00, n_state*sizeof(double));
         memset(accumTrans, 0x00, n_state*n_state*sizeof(double));
         memset(accumObserv, 0x00, n_state*n_state*sizeof(double));
+        #pragma omp parallel for
         for (int j=0; j<sequence.size(); ++j){
             HMM::baumWelchSolver(&hmm, sequence[j].data(), sequence[j].size(), accumInit, accumTrans, accumObserv);
         }
@@ -55,5 +62,10 @@ int main(const int argc, const char **argv)
     HMM::dumpHMM(fpOutputHMM, &hmm);
     fclose(fpOutputHMM);
     fpOutputHMM = NULL;
-	return 0;
+
+    delete [] accumInit;
+    delete [] accumTrans;
+    delete [] accumObserv;
+
+    return 0;
 }
