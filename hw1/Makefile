@@ -1,10 +1,10 @@
 .PHONY: all clean run
 CC=gcc
 CXX=g++
-CFLAGS=-std=c99 -O3 -march=native --fast-math
+CFLAGS=-std=c99 -O3 -march=native -ffast-math -funsafe-math-optimizations
 LDFLAGS=-lm -lpthread -fopenmp
 TARGET=train test
-TRAIN_ITER=200
+TRAIN_ITER=400
 
 all: $(TARGET)
 

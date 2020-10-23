@@ -55,9 +55,10 @@ int main(const int argc, const char **argv)
                 hmm.observation[j][k] = accumObserv[j*n_state+k] / (double)sequence.size();
             }
         }
-        HMM::dumpHMM(stdout, &hmm);
-        fprintf(stdout, "Iteration: %d / %d\n", i+1, n_iter);
+        // HMM::dumpHMM(stdout, &hmm);
+        printf("\rM: \"%s\" | T: %4d / %4d  %c  ", save_path, i+1, n_iter, "-|"[i&1]);
     }
+    printf("\n");
     FILE *fpOutputHMM = HMM::open_or_die(save_path, "w");
     HMM::dumpHMM(fpOutputHMM, &hmm);
     fclose(fpOutputHMM);
