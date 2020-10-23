@@ -8,14 +8,10 @@ TRAIN_ITER=200
 
 all: $(TARGET)
 
-lib/hmm_utils.o: src/lib/hmm_utils.cpp
-	mkdir -p ./lib
-	$(CXX) -o $@ $< -c $(CFLAGS) -Iinc
-
-train: src/train.cpp lib/hmm_utils.o
+train: src/train.cpp src/lib/hmm_utils.cpp
 	$(CXX) -o $@ $^ $(CFLAGS) $(LDFLAGS) -Iinc
 
-test: src/test.cpp lib/hmm_utils.o
+test: src/test.cpp src/lib/hmm_utils.cpp
 	$(CXX) -o $@ $^ $(CFLAGS) $(LDFLAGS) -Iinc
 
 clean:

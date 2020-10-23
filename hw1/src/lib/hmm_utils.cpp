@@ -106,6 +106,7 @@ namespace HMM {
 
 
     void baumWelchSolver ( HMM *hmm, int *observe, int T, double *accumInitial, double *accumTranstition, double *accumObservation ){
+	// static int cnt_checker = 0; // Check race condition here?!
         int s_n = hmm->state_num; //  number of states
         double *alpha = NULL;
         double *beta = NULL;
@@ -187,6 +188,7 @@ namespace HMM {
             // Initial
             accumInitial[i] += INDEX2(gamma, s_n, 0, i);
             }
+	    // printf("%d\n", ++cnt_checker); // Check race condition here?!
         }
         
         free(alpha);
