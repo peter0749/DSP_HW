@@ -9,4 +9,4 @@ echo "========== Testing all combinations ========="
 sort -n "$1" | uniq | sort -R | xargs -n6 -P$2 ./4-test-search.sh 2>&1 > "./log/search.test.log"
 
 echo "================= Summarizing ==============="
-find viterbi/mono -name 'viterbi/mono/param-*/test.macc' -type f | xargs cat > "./search-results.txt"
+find viterbi/mono -type f | grep -P "viterbi/mono/param-.*/test.macc" | xargs cat | sort -r
