@@ -1,3 +1,8 @@
 hw3/*.txt
 hw3/*.map
+hw3/*.lm
+hw3/*.seg
+hw3/*.o
+hw3/mydisambig
 hw3/test_data
+hw3/count*

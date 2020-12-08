@@ -37,6 +37,22 @@ list<VocabIndex> viterbi_bigram(
     VocabIndex best_qi_at_T = 0;
     double best_at_T = -DBL_MAX;
     unsigned int T = seq.size();
+    // Unigram
+    for (string s_qi : mapping.at(seq[0])) {
+        VocabIndex qi = voc.getIndex(s_qi.c_str());
+        if (qi == Vocab_None) qi = voc.getIndex(Vocab_Unknown);
+        VocabIndex context[] = {Vocab_None};
+        double logP = lm.wordProb(qi, context);
+        pair<unsigned int, VocabIndex> key(0, qi);
+        backtrack[key] = pair<VocabIndex, double>(-1, logP); // [0, qi] -> logP
+        if (T == 1) {
+            if (logP > best_at_T) {
+                best_at_T = logP;
+                best_qi_at_T = qi;
+            }
+        }
+    }
+    // Bigram
     for (unsigned int t=1; t<T; ++t) {
         for (string s_qi : mapping.at(seq[t])) {
             VocabIndex qi = voc.getIndex(s_qi.c_str());
@@ -46,14 +62,8 @@ list<VocabIndex> viterbi_bigram(
             for (string s_qj : mapping.at(seq[t-1])) {
                 VocabIndex qj = voc.getIndex(s_qj.c_str());
                 if (qj == Vocab_None) qj = voc.getIndex(Vocab_Unknown);
-                double log_delta_tm1_qj; // log delta_{t-1}(q_j)
                 pair<unsigned int, VocabIndex> key(t-1, qj);
-                if (t == 1){ // not initialized
-                    VocabIndex context[] = {Vocab_None};
-                    log_delta_tm1_qj = lm.wordProb(qj, context);
-                } else {
-                    log_delta_tm1_qj = backtrack[key].second;
-                }
+                double log_delta_tm1_qj = backtrack[key].second;
                 VocabIndex context[] = {qj, Vocab_None};
                 double logP_qi_qj = lm.wordProb(qi, context);
                 double score = logP_qi_qj + log_delta_tm1_qj;
@@ -96,6 +106,7 @@ list<VocabIndex> viterbi_trigram(
         fprintf(stderr, "warning: String length < 3. Automatically switch to bigram mode.\n");
         return viterbi_bigram(seq, mapping, voc, lm);
     }
+    //Bigram
     for (string s_qi : mapping.at(seq[1])) {
         VocabIndex qi = voc.getIndex(s_qi.c_str());
         if (qi == Vocab_None) qi = voc.getIndex(Vocab_Unknown);
@@ -112,6 +123,7 @@ list<VocabIndex> viterbi_trigram(
             backtrack[key] = pair<VocabIndex, double>(-1, log_delta); // -1: This is the first element.
         }
     }
+    // Trigram
     for (unsigned int t=2; t<T; ++t) {
         for (string s_qi : mapping.at(seq[t])) {
             VocabIndex qi = voc.getIndex(s_qi.c_str());
@@ -170,15 +182,24 @@ int main(int argc, char *argv[]) {
     const char *output_file = argv[4];
     char *buffer = NULL;
     const char *tok = " \n\t", *ptr = NULL;
+    int ngram = 0;
     Vocab voc;
-    Ngram lm(voc);
     {
         File lmFile(lm_file, "r");
-        lm.read(lmFile);
+        char *temp = NULL;
+        while(temp = lmFile.getline()) {
+            char *pos = strstr(temp, "-grams");
+            if (pos != NULL && pos - temp > 1) {
+                char numbers[16];
+                size_t len = pos-temp-1;
+                strncpy(numbers, temp+1, len);
+                numbers[len] = '\0';
+                ngram = max(ngram, atoi(numbers));
+            }
+        }
         lmFile.close();
     }
-    int ngram = lm.setorder(-1);
-    lm.setorder(ngram);
+    cout << ngram << endl;
     // The viterbi function pointer
     list<VocabIndex> (*viterbi)(
         const vector<string>&,
@@ -193,8 +214,14 @@ int main(int argc, char *argv[]) {
             viterbi = &viterbi_trigram;
             break;
         default:
-            fprintf(stderr, "Error: Only supports ngram <= 3!\n");
+            fprintf(stderr, "Error: Only supports bigram and trigram!\n");
             exit(2);
+    }
+    Ngram lm(voc, ngram);
+    {
+        File lmFile(lm_file, "r");
+        lm.read(lmFile);
+        lmFile.close();
     }
     unordered_map<string, vector<string> > mapping;
     {
