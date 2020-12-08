@@ -200,7 +200,6 @@ int main(int argc, char *argv[]) {
         }
         lmFile.close();
     }
-    cout << ngram << endl;
     // The viterbi function pointer
     list<VocabIndex> (*viterbi)(
         const vector<string>&,
@@ -243,7 +242,7 @@ int main(int argc, char *argv[]) {
     File input_text(input_file, "r");
     File output_text(output_file, "w");
     size_t num_threads = omp_get_max_threads();
-    size_t pool_size = 2;
+    size_t pool_size = 16;
     vector<vector<string> > input_strings;
     vector<list<VocabIndex> > output_sequence(num_threads * pool_size, list<VocabIndex>() );
     while((buffer = input_text.getline()) != NULL) {

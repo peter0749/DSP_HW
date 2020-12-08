@@ -5,8 +5,8 @@ SRC_PATH ?= src
 
 CXX = g++
 #CXXFLAGS = -O0 -g -I$(SRIPATH)/include -I$(INC_PATH)
-CXXFLAGS = -O2 -I$(SRIPATH)/include -I$(INC_PATH)
-ADD_LDFLAGS = $(LDFLAGS) -lpthread -pthread -openmp -fopenmp
+CXXFLAGS = -O2 -fopenmp -I$(SRIPATH)/include -I$(INC_PATH)
+ADD_LDFLAGS = $(LDFLAGS) -fopenmp
 vpath lib%.a $(SRIPATH)/lib/$(MACHINE_TYPE)
 vpath %.c $(SRC_PATH)
 vpath %.cpp $(SRC_PATH)
