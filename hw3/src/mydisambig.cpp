@@ -1,3 +1,4 @@
+#include <omp.h>
 #include <iostream>
 #include <vector>
 #include <list>
@@ -241,6 +242,10 @@ int main(int argc, char *argv[]) {
     }
     File input_text(input_file, "r");
     File output_text(output_file, "w");
+    size_t num_threads = omp_get_max_threads();
+    size_t pool_size = 2;
+    vector<vector<string> > input_strings;
+    vector<list<VocabIndex> > output_sequence(num_threads * pool_size, list<VocabIndex>() );
     while((buffer = input_text.getline()) != NULL) {
         ptr = strtok(buffer, tok);
         vector<string> s;
@@ -248,13 +253,40 @@ int main(int argc, char *argv[]) {
             s.push_back(string(ptr));
             ptr = strtok(NULL, tok);
         }
-        list<VocabIndex> best_path = viterbi(s, mapping, voc, lm);
-        fprintf(output_text, "<s>");
-        for (auto i : best_path) {
-            fprintf(output_text, " %s", voc.getWord(i));
+        input_strings.push_back(s);
+        if (input_strings.size() >= num_threads * pool_size) {
+            #pragma omp parallel for schedule(dynamic) shared(input_strings, output_sequence, mapping, voc, lm)
+            for (int i=0; i<input_strings.size(); ++i) {
+                output_sequence[i] = viterbi(input_strings[i], mapping, voc, lm);
+            }
+            for (int i=0; i<input_strings.size(); ++i) {
+                fprintf(output_text, "<s>");
+                for (auto j : output_sequence[i]) {
+                    fprintf(output_text, " %s", voc.getWord(j));
+                }
+                fprintf(output_text, " </s>\n");
+                fflush(output_text);
+            }
+            input_strings.clear();
         }
-        fprintf(output_text, " </s>\n");
+        
     }
+    if (input_strings.size() > 0) {
+        #pragma omp parallel for schedule(dynamic) shared(input_strings, output_sequence, mapping, voc, lm)
+        for (int i=0; i<input_strings.size(); ++i) {
+            output_sequence[i] = viterbi(input_strings[i], mapping, voc, lm);
+        }
+        for (int i=0; i<input_strings.size(); ++i) {
+            fprintf(output_text, "<s>");
+            for (auto j : output_sequence[i]) {
+                fprintf(output_text, " %s", voc.getWord(j));
+            }
+            fprintf(output_text, " </s>\n");
+            fflush(output_text);
+        }
+        input_strings.clear();
+    }
+    output_sequence.clear();
     output_text.close();
     input_text.close();
     return 0;

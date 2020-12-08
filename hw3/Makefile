@@ -6,6 +6,7 @@ SRC_PATH ?= src
 CXX = g++
 #CXXFLAGS = -O0 -g -I$(SRIPATH)/include -I$(INC_PATH)
 CXXFLAGS = -O2 -I$(SRIPATH)/include -I$(INC_PATH)
+ADD_LDFLAGS = $(LDFLAGS) -lpthread -pthread -openmp -fopenmp
 vpath lib%.a $(SRIPATH)/lib/$(MACHINE_TYPE)
 vpath %.c $(SRC_PATH)
 vpath %.cpp $(SRC_PATH)
@@ -18,7 +19,7 @@ TO ?= ZhuYin-Big5.map
 .PHONY: all clean map
 
 $(TARGET): $(OBJ) -loolm -ldstruct -lmisc
-	$(CXX) $(LDFLAGS) -o $@ $^
+	$(CXX) $(ADD_LDFLAGS) -o $@ $^
 
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c $<
