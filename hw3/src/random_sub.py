@@ -7,7 +7,7 @@ if __name__ == "__main__":
     map_path = sys.argv[2]
     output_path = sys.argv[3]
     D = dict()
-    with open(map_path, "r", encoding='cp950') as fr:
+    with open(map_path, "r", encoding='big5-hkscs') as fr:
         for line in fr.readlines():
             chars = line.strip().split()
             chars = list(filter(lambda x : len(x)>0, chars))
@@ -17,8 +17,8 @@ if __name__ == "__main__":
             for c in chars[1:]:
                 values += c.split('/')
             D[key] = values
-    with open(input_path, "r", encoding='cp950') as fr:
-        with open(output_path, "w", encoding='cp950') as fw:
+    with open(input_path, "r", encoding='big5-hkscs') as fr:
+        with open(output_path, "w", encoding='big5-hkscs') as fw:
             for in_line in fr:
                 chars = in_line.strip().split()
                 char_len = len(chars)

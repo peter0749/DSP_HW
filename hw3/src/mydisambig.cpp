@@ -59,8 +59,9 @@ list<VocabIndex> viterbi_bigram(
     for (auto s_qi : s_0) {
         VocabIndex qi = voc.getIndex(s_qi.second.c_str());
         if (qi == Vocab_None) qi = voc.getIndex(Vocab_Unknown);
-        VocabIndex context[] = {Vocab_None};
-        double logP = lm.wordProb(qi, context);
+        VocabIndex c0[] = {voc.getIndex(Vocab_SentStart),Vocab_None};
+        VocabIndex c1[] = {Vocab_None};
+        double logP = max(lm.wordProb(qi, c0), lm.wordProb(qi, c1));
         pair<int, VocabIndex> key(0, qi);
         backtrack[key] = pair<VocabIndex, double>(0, logP); // [0, qi] -> logP
         if (T == 1) {
@@ -87,8 +88,8 @@ list<VocabIndex> viterbi_bigram(
                 if (qj == Vocab_None) qj = voc.getIndex(Vocab_Unknown);
                 pair<int, VocabIndex> key(t-1, qj);
                 double log_delta_tm1_qj = backtrack[key].second;
-                VocabIndex context[] = {qj, Vocab_None};
-                double logP_qi_qj = lm.wordProb(qi, context);
+                VocabIndex c0[] = {qj, Vocab_None};
+                double logP_qi_qj = lm.wordProb(qi, c0);
                 double score = logP_qi_qj + log_delta_tm1_qj;
                 if (score > best_p) {
                     best_qj = qj;
@@ -144,9 +145,10 @@ list<VocabIndex> viterbi_trigram(
             // delta_2(q_i,q_j) = max_{qk} { P(q_i|q_j) delta_1(q_j, q_k) }
             //                  = max_{qk} { P(q_i|q_j) P(q_j) }
             //                  = P(q_i|q_j) P(q_j)
-            VocabIndex c0[] = {Vocab_None};
-            VocabIndex c1[] = {qj, Vocab_None};
-            double log_delta = lm.wordProb(qi, c1) + lm.wordProb(qj, c0);
+            VocabIndex c0[] = {qj, Vocab_None};
+            VocabIndex c1[] = {voc.getIndex(Vocab_SentStart), Vocab_None};
+            VocabIndex c2[] = {Vocab_None};
+            double log_delta = lm.wordProb(qi, c0) + max(lm.wordProb(qj, c1), lm.wordProb(qj, c2));
             pair<int, pair<VocabIndex, VocabIndex> > key = {1, {qi, qj}};
             backtrack[key] = pair<VocabIndex, double>(0, log_delta); // -1: This is the first element.
         }
@@ -176,8 +178,8 @@ list<VocabIndex> viterbi_trigram(
                     if (qk == Vocab_None) qk = voc.getIndex(Vocab_Unknown);
                     pair<int, pair<VocabIndex, VocabIndex> > key = {t-1, {qj, qk}};
                     double log_delta_tm1_qj_qk = backtrack[key].second;
-                    VocabIndex context[] = {qj, qk, Vocab_None};
-                    double logP_qi_qj_qk = lm.wordProb(qi, context);
+                    VocabIndex c0[] = {qj, qk, Vocab_None};
+                    double logP_qi_qj_qk = lm.wordProb(qi, c0);
                     double score = logP_qi_qj_qk + log_delta_tm1_qj_qk;
                     if (score > best_p) {
                         best_qk = qk;
@@ -285,11 +287,11 @@ int main(int argc, char *argv[]) {
         for (auto &x : mapping) {
             auto key = x.first;
             vector<pair<double, string> > &value = x.second;
-            VocabIndex context[] = {Vocab_None};
             for (int i=0; i<value.size(); ++i) {
                 VocabIndex voc_ind = voc.getIndex(value[i].second.c_str());
                 if (voc_ind == Vocab_None) voc_ind = unk_ind;
-                double c = lm.wordProb(voc_ind, context);
+                VocabIndex c0[] = {Vocab_None};
+                double c = lm.wordProb(voc_ind, c0);
                 mapping[key][i].first = -c;
             }
             // Rank from highest freq to lowest freq for beam search
@@ -309,6 +311,7 @@ int main(int argc, char *argv[]) {
             s.push_back(string(ptr));
             ptr = strtok(NULL, tok);
         }
+        s.push_back(string(Vocab_SentEnd));
         input_strings.push_back(s);
         if (input_strings.size() >= num_threads * pool_size) {
             #pragma omp parallel for schedule(dynamic, 1) shared(input_strings, output_sequence, mapping, voc, lm)
@@ -316,13 +319,13 @@ int main(int argc, char *argv[]) {
                 output_sequence[i] = viterbi(input_strings[i], mapping, voc, lm);
             }
             for (int i=0; i<input_strings.size(); ++i) {
-                fprintf(output_text, "<s>");
                 int t = 0;
+                fprintf(output_text, "%s", Vocab_SentStart);
                 for (auto j : output_sequence[i]) {
                     fprintf(output_text, " %s", (j == unk_ind) ? input_strings[i][t].c_str() : voc.getWord(j));
                     ++t;
                 }
-                fprintf(output_text, " </s>\n");
+                fprintf(output_text, "\n");
                 fflush(output_text);
             }
             input_strings.clear();
@@ -335,13 +338,13 @@ int main(int argc, char *argv[]) {
             output_sequence[i] = viterbi(input_strings[i], mapping, voc, lm);
         }
         for (int i=0; i<input_strings.size(); ++i) {
-            fprintf(output_text, "<s>");
             int t = 0;
+            fprintf(output_text, "%s", Vocab_SentStart);
             for (auto j : output_sequence[i]) {
                 fprintf(output_text, " %s", (j == unk_ind) ? input_strings[i][t].c_str() : voc.getWord(j));
                 ++t;
             }
-            fprintf(output_text, " </s>\n");
+            fprintf(output_text, "\n");
             fflush(output_text);
         }
         input_strings.clear();
