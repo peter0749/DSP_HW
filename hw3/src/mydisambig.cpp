@@ -19,15 +19,29 @@ using namespace std;
 typedef struct hash_pair_struct {
     template <class T1, class T2>
     size_t operator() (const pair<T1, T2> &p) const {
-        return hash<T1>{}(p.first) ^ hash<T2>{}(p.second);
+        size_t lhs = hash<T1>{}(p.first);
+        size_t rhs = hash<T2>{}(p.second);
+        lhs ^= rhs + 0x9e3779b9 + (lhs << 6) + (lhs >> 2);
+        return lhs;
     }
     template <class T1, class T2, class T3>
     size_t operator() (const pair<pair<T1, T2>, T3> &p) const {
-        return hash<T1>{}(p.first.first) ^ hash<T2>{}(p.first.second) ^ hash<T3>{}(p.second);
+        size_t lhs = hash<T1>{}(p.first.first);
+        size_t rhs = hash<T2>{}(p.first.second);
+        lhs ^= rhs + 0x9e3779b9 + (lhs << 6) + (lhs >> 2);
+        rhs = hash<T3>{}(p.second);
+        lhs ^= rhs + 0x9e3779b9 + (lhs << 6) + (lhs >> 2);
+        return lhs;
     }
     template <class T1, class T2, class T3>
     size_t operator() (const pair<T1, pair<T2, T3> > &p) const {
-        return hash<T1>{}(p.first) ^ hash<T2>{}(p.second.first) ^ hash<T3>{}(p.second.second);
+        size_t lhs = hash<T2>{}(p.second.first);
+        size_t rhs = hash<T3>{}(p.second.second);
+        lhs ^= rhs + 0x9e3779b9 + (lhs << 6) + (lhs >> 2);
+        rhs = lhs;
+        lhs = hash<T1>{}(p.first);
+        lhs ^= rhs + 0x9e3779b9 + (lhs << 6) + (lhs >> 2);
+        return lhs;
     }
 } hash_pair;
 
@@ -106,7 +120,8 @@ list<VocabIndex> viterbi_trigram(
         const unordered_map<string, vector<pair<double, string> > > &mapping,
         Vocab &voc,
         Ngram &lm) {
-    const int n_beams = 200;
+    const int n_beams_hi = 200;
+    const int n_beams_lo = 150;
     // backtracking: (t, i, j) -> (best_k, value)
     unordered_map< pair<int, pair<VocabIndex, VocabIndex> >, pair<VocabIndex, double>, hash_pair > backtrack;
     // map< pair<int, pair<VocabIndex, VocabIndex> >, pair<VocabIndex, double> > backtrack;
@@ -144,22 +159,19 @@ list<VocabIndex> viterbi_trigram(
     for (int t=2; t<T; ++t) {
         s_n.pop_front(); // discard s_-1
 	    s_n.push_back((mapping.count(seq[t]) == 0) ? vector<pair<double, string> >(1,{0.0, seq[t]}) : mapping.at(seq[t])); // s_2
-        /*
-        cerr << t;
-        for (int jj=0; jj<3; ++jj) cerr << " " << s_n[jj].size();
-        cerr << endl;
-        */
         for (auto s_qi : s_n[2]) {
             VocabIndex qi = voc.getIndex(s_qi.second.c_str());
             if (qi == Vocab_None) qi = voc.getIndex(Vocab_Unknown);
+            int beam_j = 0;
             for (auto s_qj : s_n[1]) {
+                if (beam_j >= n_beams_hi) break; // Speed up
                 VocabIndex qj = voc.getIndex(s_qj.second.c_str());
                 if (qj == Vocab_None) qj = voc.getIndex(Vocab_Unknown);
                 VocabIndex best_qk = 0;
                 double best_p = -DBL_MAX;
-                int beam_cnt = 0;
+                int beam_k = 0;
                 for (auto s_qk : s_n[0]) {
-                    if (beam_cnt >= n_beams) break; // Speed up
+                    if (beam_k >= n_beams_lo) break; // Speed up
                     VocabIndex qk = voc.getIndex(s_qk.second.c_str());
                     if (qk == Vocab_None) qk = voc.getIndex(Vocab_Unknown);
                     pair<int, pair<VocabIndex, VocabIndex> > key = {t-1, {qj, qk}};
@@ -171,7 +183,7 @@ list<VocabIndex> viterbi_trigram(
                         best_qk = qk;
                         best_p = score;
                     }
-                    ++beam_cnt;
+                    ++beam_k;
                 }
                 pair<int, pair<VocabIndex, VocabIndex> > key = {t, {qi, qj}};
                 backtrack[key] = pair<VocabIndex, double>(best_qk, best_p);
@@ -181,6 +193,7 @@ list<VocabIndex> viterbi_trigram(
                         best_at_T = best_p;
                     }
                 }
+                ++beam_j;
             }
         }
     }
@@ -266,6 +279,7 @@ int main(int argc, char *argv[]) {
         }
         mapping_fp.close();
     }
+    VocabIndex unk_ind = voc.getIndex(Vocab_Unknown);
     // Preprocess mapping
     if (ngram == 3) {
         for (auto &x : mapping) {
@@ -274,7 +288,7 @@ int main(int argc, char *argv[]) {
             VocabIndex context[] = {Vocab_None};
             for (int i=0; i<value.size(); ++i) {
                 VocabIndex voc_ind = voc.getIndex(value[i].second.c_str());
-                if (voc_ind == Vocab_None) voc_ind = voc.getIndex(Vocab_Unknown);
+                if (voc_ind == Vocab_None) voc_ind = unk_ind;
                 double c = lm.wordProb(voc_ind, context);
                 mapping[key][i].first = -c;
             }
@@ -303,8 +317,10 @@ int main(int argc, char *argv[]) {
             }
             for (int i=0; i<input_strings.size(); ++i) {
                 fprintf(output_text, "<s>");
+                int t = 0;
                 for (auto j : output_sequence[i]) {
-                    fprintf(output_text, " %s", voc.getWord(j));
+                    fprintf(output_text, " %s", (j == unk_ind) ? input_strings[i][t].c_str() : voc.getWord(j));
+                    ++t;
                 }
                 fprintf(output_text, " </s>\n");
                 fflush(output_text);
@@ -320,8 +336,10 @@ int main(int argc, char *argv[]) {
         }
         for (int i=0; i<input_strings.size(); ++i) {
             fprintf(output_text, "<s>");
+            int t = 0;
             for (auto j : output_sequence[i]) {
-                fprintf(output_text, " %s", voc.getWord(j));
+                fprintf(output_text, " %s", (j == unk_ind) ? input_strings[i][t].c_str() : voc.getWord(j));
+                ++t;
             }
             fprintf(output_text, " </s>\n");
             fflush(output_text);
