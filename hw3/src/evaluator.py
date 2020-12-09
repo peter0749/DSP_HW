@@ -14,4 +14,4 @@ if __name__ == '__main__':
                 for i, j in zip(out, gt):
                     n_correct += 1 if (i==j) else 0
                 n_total += len(gt)
-    print(n_correct / n_total)
+    print("Accuracy: %.4f (#wrong: %d, #total: %d)"%(n_correct / n_total, (n_total-n_correct), n_total))
