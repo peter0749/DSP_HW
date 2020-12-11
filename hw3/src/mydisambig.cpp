@@ -59,9 +59,9 @@ list<VocabIndex> viterbi_bigram(
     for (auto s_qi : s_0) {
         VocabIndex qi = voc.getIndex(s_qi.second.c_str());
         if (qi == Vocab_None) qi = voc.getIndex(Vocab_Unknown);
-        VocabIndex c0[] = {voc.getIndex(Vocab_SentStart),Vocab_None};
-        VocabIndex c1[] = {Vocab_None};
-        double logP = max(lm.wordProb(qi, c0), lm.wordProb(qi, c1));
+        VocabIndex c0[] = {Vocab_None};
+        VocabIndex c1[] = {voc.getIndex(Vocab_SentStart), Vocab_None};
+        double logP = max(lm.wordProb(qi, c0), lm.wordProb(qi, c1) + lm.wordProb(voc.getIndex(Vocab_SentStart), c0));
         pair<int, VocabIndex> key(0, qi);
         backtrack[key] = pair<VocabIndex, double>(0, logP); // [0, qi] -> logP
         if (T == 1) {
@@ -134,8 +134,8 @@ list<VocabIndex> viterbi_trigram(
         return viterbi_bigram(seq, mapping, voc, lm);
     }
     //Bigram
-	vector<pair<double, string> > s_1 = (mapping.count(seq[1]) == 0) ? vector<pair<double, string> >(1,{0.0,seq[1]}) : mapping.at(seq[1]);
-	vector<pair<double, string> > s_0 = (mapping.count(seq[0]) == 0) ? vector<pair<double, string> >(1,{0.0,seq[0]}) : mapping.at(seq[0]);
+    vector<pair<double, string> > s_1 = (mapping.count(seq[1]) == 0) ? vector<pair<double, string> >(1,{0.0,seq[1]}) : mapping.at(seq[1]);
+    vector<pair<double, string> > s_0 = (mapping.count(seq[0]) == 0) ? vector<pair<double, string> >(1,{0.0,seq[0]}) : mapping.at(seq[0]);
     for (auto s_qi : s_1) {
         VocabIndex qi = voc.getIndex(s_qi.second.c_str());
         if (qi == Vocab_None) qi = voc.getIndex(Vocab_Unknown);
@@ -146,9 +146,9 @@ list<VocabIndex> viterbi_trigram(
             //                  = max_{qk} { P(q_i|q_j) P(q_j) }
             //                  = P(q_i|q_j) P(q_j)
             VocabIndex c0[] = {qj, Vocab_None};
-            VocabIndex c1[] = {voc.getIndex(Vocab_SentStart), Vocab_None};
-            VocabIndex c2[] = {Vocab_None};
-            double log_delta = lm.wordProb(qi, c0) + max(lm.wordProb(qj, c1), lm.wordProb(qj, c2));
+            VocabIndex c1[] = {Vocab_None};
+            VocabIndex c2[] = {voc.getIndex(Vocab_SentStart), Vocab_None};
+            double log_delta = lm.wordProb(qi, c0) + max(lm.wordProb(qj, c1), lm.wordProb(qj, c2) + lm.wordProb(voc.getIndex(Vocab_SentStart), c1));
             pair<int, pair<VocabIndex, VocabIndex> > key = {1, {qi, qj}};
             backtrack[key] = pair<VocabIndex, double>(0, log_delta); // -1: This is the first element.
         }
@@ -160,7 +160,7 @@ list<VocabIndex> viterbi_trigram(
     s_n.push_back(s_1); // s_1
     for (int t=2; t<T; ++t) {
         s_n.pop_front(); // discard s_-1
-	    s_n.push_back((mapping.count(seq[t]) == 0) ? vector<pair<double, string> >(1,{0.0, seq[t]}) : mapping.at(seq[t])); // s_2
+        s_n.push_back((mapping.count(seq[t]) == 0) ? vector<pair<double, string> >(1,{0.0, seq[t]}) : mapping.at(seq[t])); // s_2
         for (auto s_qi : s_n[2]) {
             VocabIndex qi = voc.getIndex(s_qi.second.c_str());
             if (qi == Vocab_None) qi = voc.getIndex(Vocab_Unknown);
