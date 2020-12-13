@@ -9,6 +9,7 @@
 #include <utility>
 #include <unordered_map>
 #include <map>
+#include <queue>
 #include <algorithm>
 // #include <assert.h>
 #include "Ngram.h"
@@ -47,7 +48,7 @@ typedef struct hash_pair_struct {
 
 list<VocabIndex> viterbi_bigram(
         const vector<string> &seq,
-        const unordered_map<string, vector<pair<double, string> > > &mapping,
+        const unordered_map<string, vector<string> > &mapping,
         Vocab &voc,
         Ngram &lm) {
     unordered_map< pair<int, VocabIndex>, pair<VocabIndex, double>, hash_pair > backtrack;
@@ -55,9 +56,9 @@ list<VocabIndex> viterbi_bigram(
     double best_at_T = -DBL_MAX;
     int T = seq.size();
     // Unigram
-    vector<pair<double,string> > s_0 = (mapping.count(seq[0])==0) ? vector<pair<double, string> >(1, {0.0, seq[0]}) : mapping.at(seq[0]);
+    vector<string> s_0 = (mapping.count(seq[0])==0) ? vector<string>(1, seq[0]) : mapping.at(seq[0]);
     for (auto s_qi : s_0) {
-        VocabIndex qi = voc.getIndex(s_qi.second.c_str());
+        VocabIndex qi = voc.getIndex(s_qi.c_str());
         if (qi == Vocab_None) qi = voc.getIndex(Vocab_Unknown);
         VocabIndex c0[] = {Vocab_None};
         VocabIndex c1[] = {voc.getIndex(Vocab_SentStart), Vocab_None};
@@ -72,19 +73,19 @@ list<VocabIndex> viterbi_bigram(
         }
     }
     // Bigram
-    deque<vector<pair<double, string> > > s_n;
+    deque<vector<string> > s_n;
     s_n.push_back({}); // s_-1
     s_n.push_back(s_0); // s_0
     for (int t=1; t<T; ++t) {
         s_n.pop_front(); // discard s_-1
-        s_n.push_back((mapping.count(seq[t]) == 0) ? vector<pair<double, string> >(1,{0.0, seq[t]}) : mapping.at(seq[t])); // s_1
+        s_n.push_back((mapping.count(seq[t]) == 0) ? vector<string>(1,seq[t]) : mapping.at(seq[t])); // s_1
         for (auto s_qi : s_n[1]) {
-            VocabIndex qi = voc.getIndex(s_qi.second.c_str());
+            VocabIndex qi = voc.getIndex(s_qi.c_str());
             if (qi == Vocab_None) qi = voc.getIndex(Vocab_Unknown);
             VocabIndex best_qj = 0;
             double best_p = -DBL_MAX;
             for (auto s_qj : s_n[0]) {
-                VocabIndex qj = voc.getIndex(s_qj.second.c_str());
+                VocabIndex qj = voc.getIndex(s_qj.c_str());
                 if (qj == Vocab_None) qj = voc.getIndex(Vocab_Unknown);
                 pair<int, VocabIndex> key(t-1, qj);
                 double log_delta_tm1_qj = backtrack[key].second;
@@ -118,11 +119,10 @@ list<VocabIndex> viterbi_bigram(
 
 list<VocabIndex> viterbi_trigram(
         const vector<string> &seq,
-        const unordered_map<string, vector<pair<double, string> > > &mapping,
+        const unordered_map<string, vector<string> > &mapping,
         Vocab &voc,
         Ngram &lm) {
-    const int n_beams_hi = 200;
-    const int n_beams_lo = 150;
+    const int n_beams = 200;
     // backtracking: (t, i, j) -> (best_k, value)
     unordered_map< pair<int, pair<VocabIndex, VocabIndex> >, pair<VocabIndex, double>, hash_pair > backtrack;
     // map< pair<int, pair<VocabIndex, VocabIndex> >, pair<VocabIndex, double> > backtrack;
@@ -134,13 +134,13 @@ list<VocabIndex> viterbi_trigram(
         return viterbi_bigram(seq, mapping, voc, lm);
     }
     //Bigram
-    vector<pair<double, string> > s_1 = (mapping.count(seq[1]) == 0) ? vector<pair<double, string> >(1,{0.0,seq[1]}) : mapping.at(seq[1]);
-    vector<pair<double, string> > s_0 = (mapping.count(seq[0]) == 0) ? vector<pair<double, string> >(1,{0.0,seq[0]}) : mapping.at(seq[0]);
+    vector<string> s_1 = (mapping.count(seq[1]) == 0) ? vector<string>(1,seq[1]) : mapping.at(seq[1]);
+    vector<string> s_0 = (mapping.count(seq[0]) == 0) ? vector<string>(1,seq[0]) : mapping.at(seq[0]);
     for (auto s_qi : s_1) {
-        VocabIndex qi = voc.getIndex(s_qi.second.c_str());
+        VocabIndex qi = voc.getIndex(s_qi.c_str());
         if (qi == Vocab_None) qi = voc.getIndex(Vocab_Unknown);
         for (auto s_qj : s_0) {
-            VocabIndex qj = voc.getIndex(s_qj.second.c_str());
+            VocabIndex qj = voc.getIndex(s_qj.c_str());
             if (qj == Vocab_None) qj = voc.getIndex(Vocab_Unknown);
             // delta_2(q_i,q_j) = max_{qk} { P(q_i|q_j) delta_1(q_j, q_k) }
             //                  = max_{qk} { P(q_i|q_j) P(q_j) }
@@ -154,27 +154,24 @@ list<VocabIndex> viterbi_trigram(
         }
     }
     // Trigram
-    deque<vector<pair<double, string> > > s_n;
+    deque<vector<string> > s_n;
     s_n.push_back({}); // s_-1
     s_n.push_back(s_0); // s_0
     s_n.push_back(s_1); // s_1
     for (int t=2; t<T; ++t) {
         s_n.pop_front(); // discard s_-1
-        s_n.push_back((mapping.count(seq[t]) == 0) ? vector<pair<double, string> >(1,{0.0, seq[t]}) : mapping.at(seq[t])); // s_2
+        s_n.push_back((mapping.count(seq[t]) == 0) ? vector<string>(1,seq[t]) : mapping.at(seq[t])); // s_2
+        // cerr << s_n[0].size() << " " << s_n[1].size() << " " << s_n[2].size() << endl;
         for (auto s_qi : s_n[2]) {
-            VocabIndex qi = voc.getIndex(s_qi.second.c_str());
+            VocabIndex qi = voc.getIndex(s_qi.c_str());
             if (qi == Vocab_None) qi = voc.getIndex(Vocab_Unknown);
-            int beam_j = 0;
             for (auto s_qj : s_n[1]) {
-                if (beam_j >= n_beams_hi) break; // Speed up
-                VocabIndex qj = voc.getIndex(s_qj.second.c_str());
+                VocabIndex qj = voc.getIndex(s_qj.c_str());
                 if (qj == Vocab_None) qj = voc.getIndex(Vocab_Unknown);
                 VocabIndex best_qk = 0;
                 double best_p = -DBL_MAX;
-                int beam_k = 0;
                 for (auto s_qk : s_n[0]) {
-                    if (beam_k >= n_beams_lo) break; // Speed up
-                    VocabIndex qk = voc.getIndex(s_qk.second.c_str());
+                    VocabIndex qk = voc.getIndex(s_qk.c_str());
                     if (qk == Vocab_None) qk = voc.getIndex(Vocab_Unknown);
                     pair<int, pair<VocabIndex, VocabIndex> > key = {t-1, {qj, qk}};
                     double log_delta_tm1_qj_qk = backtrack[key].second;
@@ -185,7 +182,6 @@ list<VocabIndex> viterbi_trigram(
                         best_qk = qk;
                         best_p = score;
                     }
-                    ++beam_k;
                 }
                 pair<int, pair<VocabIndex, VocabIndex> > key = {t, {qi, qj}};
                 backtrack[key] = pair<VocabIndex, double>(best_qk, best_p);
@@ -195,8 +191,37 @@ list<VocabIndex> viterbi_trigram(
                         best_at_T = best_p;
                     }
                 }
-                ++beam_j;
             }
+        }
+        // Beam Pruning
+        priority_queue<pair<double,VocabIndex>, vector<pair<double,VocabIndex> > > beam; // find pruned s_n[2]
+        for (auto s_qi : s_n[2]) {
+            VocabIndex qi = voc.getIndex(s_qi.c_str());
+            if (qi == Vocab_None) qi = voc.getIndex(Vocab_Unknown);
+            VocabIndex best_j = 0;
+            double best_at_i = -DBL_MAX;
+            for (auto s_qj : s_n[1]) {
+                VocabIndex qj = voc.getIndex(s_qj.c_str());
+                if (qj == Vocab_None) qj = voc.getIndex(Vocab_Unknown);
+                pair<int, pair<VocabIndex, VocabIndex> > key = {t, {qi, qj}};
+                double prob = backtrack[key].second;
+                if (prob > best_at_i) {
+                    best_j = qj;
+                    best_at_i = prob;
+                }
+            }
+            if (beam.size() < n_beams) beam.push({-best_at_i, qi}); // initialize top-k
+            else if (best_at_i > -beam.top().first) { // update top-kth
+                beam.pop();
+                beam.push({-best_at_i, qi});
+            }
+        }
+        s_n[2].clear(); // prune s_n[2]
+        while (!beam.empty()) {
+            VocabIndex qi = beam.top().second;
+            beam.pop();
+            string s_qi(voc.getWord(qi));
+            s_n[2].push_back(s_qi);
         }
     }
     s_n.clear();
@@ -245,7 +270,7 @@ int main(int argc, char *argv[]) {
     // The viterbi function pointer
     list<VocabIndex> (*viterbi)(
         const vector<string>&,
-        const unordered_map<string, vector<pair<double, string> > > &,
+        const unordered_map<string, vector<string> > &,
         Vocab &,
         Ngram &);
     switch (ngram) {
@@ -265,39 +290,23 @@ int main(int argc, char *argv[]) {
         lm.read(lmFile);
         lmFile.close();
     }
-    unordered_map<string, vector<pair<double, string> > > mapping;
+    unordered_map<string, vector<string> > mapping;
     {
         File mapping_fp(mapping_file, "r");
         while((buffer = mapping_fp.getline()) != NULL) {
             ptr = strtok(buffer, tok);
             // assert(ptr != NULL);
             string key(ptr);
-            mapping[key] = vector<pair<double, string> >();
+            mapping[key] = vector<string>();
             ptr = strtok(NULL, tok);
             while(ptr != NULL) {
-                mapping[key].push_back({0.0, string(ptr)});
+                mapping[key].push_back(string(ptr));
                 ptr = strtok(NULL, tok);
             }
         }
         mapping_fp.close();
     }
     VocabIndex unk_ind = voc.getIndex(Vocab_Unknown);
-    // Preprocess mapping
-    if (ngram == 3) {
-        for (auto &x : mapping) {
-            auto key = x.first;
-            vector<pair<double, string> > &value = x.second;
-            for (int i=0; i<value.size(); ++i) {
-                VocabIndex voc_ind = voc.getIndex(value[i].second.c_str());
-                if (voc_ind == Vocab_None) voc_ind = unk_ind;
-                VocabIndex c0[] = {Vocab_None};
-                double c = lm.wordProb(voc_ind, c0);
-                mapping[key][i].first = -c;
-            }
-            // Rank from highest freq to lowest freq for beam search
-            sort(mapping[key].begin(), mapping[key].end());
-        }
-    }
     File input_text(input_file, "r");
     File output_text(output_file, "w");
     size_t num_threads = omp_get_max_threads();
